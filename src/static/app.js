@@ -84,3 +84,94 @@ document.addEventListener("DOMContentLoaded", () => {
   // Initialize app
   fetchActivities();
 });
+
+// Fetch activities and render activity cards with participants list
+
+(async function () {
+  // Helper to create elements
+  function el(tag, attrs = {}, children = []) {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "class") node.className = v;
+      else if (k === "text") node.textContent = v;
+      else node.setAttribute(k, v);
+    }
+    (Array.isArray(children) ? children : [children]).forEach(c => {
+      if (typeof c === "string") node.appendChild(document.createTextNode(c));
+      else if (c instanceof Node) node.appendChild(c);
+    });
+    return node;
+  }
+
+  // Find container: prefer #activities, fallback to first <main>
+  const container =
+    document.getElementById("activities") ||
+    document.querySelector("main") ||
+    document.body;
+
+  // Small title if using main as container
+  if (container.tagName.toLowerCase() === "main" && !container.querySelector(".activities-wrapper")) {
+    const wrapper = el("div", { class: "activities-wrapper" });
+    container.appendChild(wrapper);
+  }
+
+  const target = container.querySelector(".activities-wrapper") || container;
+
+  try {
+    const res = await fetch("/activities");
+    if (!res.ok) throw new Error("Failed to load activities");
+    const activities = await res.json();
+
+    // Clear target
+    target.innerHTML = "";
+
+    Object.entries(activities).forEach(([name, info]) => {
+      const card = el("article", { class: "activity-card" });
+
+      card.appendChild(el("h4", { text: name }));
+      if (info.description) {
+        card.appendChild(el("p", { text: info.description }));
+      }
+      if (info.schedule) {
+        card.appendChild(el("p", { text: "Schedule: " + info.schedule }));
+      }
+
+      // Participants section
+      const participantsWrap = el("div", { class: "participants" });
+      const headerText = "Participants";
+      const header = el("h5", { text: headerText });
+
+      // optional max participants indicator
+      if (typeof info.max_participants === "number") {
+        const maxSpan = el("span", { class: "max-participants", text: ` (${(info.participants||[]).length}/${info.max_participants})` });
+        header.appendChild(maxSpan);
+      }
+
+      participantsWrap.appendChild(header);
+
+      const ul = el("ul");
+      const participants = Array.isArray(info.participants) ? info.participants : [];
+
+      if (participants.length === 0) {
+        // show a subtle message if no participants
+        const li = el("li", { text: "No participants yet" });
+        li.classList.add("info");
+        ul.appendChild(li);
+      } else {
+        participants.forEach(p => {
+          const li = el("li", { text: p });
+          ul.appendChild(li);
+        });
+      }
+
+      participantsWrap.appendChild(ul);
+      card.appendChild(participantsWrap);
+
+      target.appendChild(card);
+    });
+  } catch (err) {
+    console.error(err);
+    const msg = el("div", { class: "message error", text: "Unable to load activities." });
+    target.appendChild(msg);
+  }
+})();
